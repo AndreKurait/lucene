@@ -16,6 +16,8 @@
  */
 package org.apache.lucene.store;
 
+import static org.hamcrest.Matchers.arrayContainingInAnyOrder;
+
 import java.util.List;
 import java.util.Set;
 import org.apache.lucene.store.IOContext.FileOpenHint;
@@ -51,11 +53,47 @@ public class TestIOContext extends LuceneTestCase {
     }
   }
 
+  /** A merge context with no MergeInfo, which is all a reader reopening a file can say. */
+  public void testMergeWithoutMergeInfo() {
+    IOContext context = IOContext.merge();
+    assertEquals(IOContext.Context.MERGE, context.context());
+    assertNull(context.mergeInfo());
+    assertNull(context.flushInfo());
+    assertEquals(Set.of(), context.hints());
+
+    IOContext withHint = context.withHints(DataAccessHint.SEQUENTIAL);
+    assertEquals(IOContext.Context.MERGE, withHint.context());
+    assertNull(withHint.mergeInfo());
+    assertEquals(Set.of(DataAccessHint.SEQUENTIAL), withHint.hints());
+  }
+
+  public void testHintsOfClass() {
+    IOContext context =
+        IOContext.DEFAULT.withHints(
+            CustomTestHint.CUSTOM_TEST_HINT1, PreloadHint.INSTANCE, DataAccessHint.SEQUENTIAL);
+    assertThat(
+        context.hints(CustomTestHint.class).toArray(CustomTestHint[]::new),
+        arrayContainingInAnyOrder(CustomTestHint.CUSTOM_TEST_HINT1));
+  }
+
+  public void testRemoveHint() {
+    IOContext context =
+        IOContext.DEFAULT.withHints(
+            CustomTestHint.CUSTOM_TEST_HINT1, PreloadHint.INSTANCE, DataAccessHint.SEQUENTIAL);
+    assertThat(
+        context.removeHints(CustomTestHint.class).toArray(FileOpenHint[]::new),
+        arrayContainingInAnyOrder(PreloadHint.INSTANCE, DataAccessHint.SEQUENTIAL));
+    assertThat(
+        context.removeHints(DataAccessHint.class).toArray(FileOpenHint[]::new),
+        arrayContainingInAnyOrder(CustomTestHint.CUSTOM_TEST_HINT1, PreloadHint.INSTANCE));
+  }
+
   protected List<IOContext> getContexts() {
     return List.of(
         IOContext.DEFAULT,
         IOContext.READONCE,
         IOContext.flush(new FlushInfo(1, 2)),
+        IOContext.merge(),
         IOContext.merge(new MergeInfo(1, 2, true, 4)));
   }
 
